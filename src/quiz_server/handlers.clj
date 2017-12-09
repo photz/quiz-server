@@ -1,6 +1,7 @@
 (ns quiz-server.handlers
   (:gen-class)
   (:require [clojure.data [json :as json]])
+  (:require [clojure.tools.logging :as log])
   (:require [quiz-server [question :as question]])
   (:require [quiz-server [user :as user]])
   (:require [org.httpkit.server
@@ -26,8 +27,7 @@
 
 
 (defn connect! [state channel]
-  (println @state)
-  (println "connected")
+  (log/info "got a new client")
   (swap! state assoc-in
          [:users channel]
          user/new)
@@ -36,8 +36,7 @@
 
 
 (defn disconnect! [state channel]
-  (println @state)
-  (println "disconnected")
+  (log/info "client left")
   (swap! state update-in [:users] dissoc channel)
   (doseq [channel (keys (get-in @state [:users]))]
     (send! channel (serialize-state @state))))
@@ -48,16 +47,12 @@
 
 (defmethod client-msg "set-name" [state channel msg]
   (let [new-name (msg "new-name")]
-    (println "set the name to..." name)
     (swap! state assoc-in [:users channel :name] new-name)
     (doseq [channel (keys (get-in @state [:users]))]
       (send! channel (serialize-state @state)))))
 
 (defmethod client-msg "join" [state channel msg]
   (let [name (msg "name")]
-    (println "join and set name to " name)
-    (println "------------------------------------------------")
-    (println msg)
     (swap! state update-in [:users channel]
            (fn [user]
              (-> user
@@ -104,32 +99,26 @@
                   map-kv
                   user/reset-answer)]
 
-        (println "everybody submitted")
-        (println state)
-
         (doseq [channel (keys (get-in state [:users]))]
           (send! channel (serialize-state state)))
 
         state)
       (do
-        (println "some people have not submitted an answer")
         (doseq [channel (keys (get-in state [:users]))]
           (send! channel (serialize-state state)))
         state))))
 
 (defmethod client-msg "submit-answer" [state channel msg]
   (let [selected-answer (msg "selected-answer")]
-    (println "submit answer")
     (swap! state submit-answer channel selected-answer)))
 
 
 (defmethod client-msg :default [state channel msg]
-  (println "unrecognizable message from a client"))
+  (log/warn "got a message with an unknown type"))
 
 
 (defn handle-msg [state channel raw-msg]
   "Handles a raw message from a client"
   (let [msg (json/read-str raw-msg)]
-    (client-msg state channel msg)
-    (println "-------------")
-    (println state)))
+    (client-msg state channel msg)))
+

@@ -39,8 +39,6 @@
                                 1 "top-level domain"
                                 2 "weder noch"}}]
 
-    (println new-question)
-
     new-question))
 
 
